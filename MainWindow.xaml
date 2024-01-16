@@ -5,9 +5,14 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TestLauncher"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        <Button Content="Загрузить" HorizontalAlignment="Center" Margin="0,307,0,0" VerticalAlignment="Top" Height="80" Width="177"/>
-
-    </Grid>
+        ResizeMode="NoResize"
+        Title="MainWindow" Height="670" Width="1063" 
+        WindowStyle="None" AllowsTransparency="True" 
+        WindowStartupLocation="CenterScreen" 
+        ScrollViewer.VerticalScrollBarVisibility="Disabled" 
+        VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Foreground="#00000000">
+    <Window.Background>
+        <ImageBrush ImageSource="/bg.png"/>
+    </Window.Background>
+    <Button x:Name="main_button" Content="Загрузить" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#00DDDDDD" IsDefault="True" FontWeight="Bold" FontSize="22" Foreground="White" Click="main_button_Click" Height="50" Width="150" Margin="0,0,137,95"/>
 </Window>

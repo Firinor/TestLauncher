@@ -24,5 +24,10 @@ namespace TestLauncher
         {
             InitializeComponent();
         }
+
+        private void main_button_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }
