@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using TestLauncher.MainScripts;
 
 namespace TestLauncher
 {
@@ -10,12 +11,16 @@ namespace TestLauncher
         {
             get
             {
-                return _gameDirectory;
+                return LauncherConst.USER_GAME_DIRECTORY;
             }
             set
             {
-                if (!string.IsNullOrEmpty(value) && value != _gameDirectory)
-                    _gameDirectory = value;
+                if (string.IsNullOrEmpty(value) || value == _gameDirectory)
+                    return;
+
+                _gameDirectory = value;
+                LauncherConst.USER_GAME_DIRECTORY = value;
+                SaveManager.Save(this);
             }
         }
     }

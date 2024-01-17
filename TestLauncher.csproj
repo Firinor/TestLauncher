@@ -9,11 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="bg.png" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="bg.png" />
     <Resource Include="Images\bg.png" />
   </ItemGroup>
 

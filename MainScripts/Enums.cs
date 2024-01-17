@@ -2,8 +2,10 @@
 {
     public enum GameStatus
     {
-        None,
+        LoadRequired,
+        //UpdateRequired,
         Loading,
+        UnpackRequired,
         Unpacking,
         Ready
     }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Forms;
@@ -13,59 +14,78 @@ namespace TestLauncher
     public partial class LauncherWindow : Window
     {
         UserSettings userSettings;
+        Loading loading = new();
+        Ziper ziper = new();
+
         GameStatus gameStatus;
 
         public LauncherWindow()
         {
-            userSettings = SaveManager.LoadUserSettings();
-
             InitializeComponent();
 
+            LoadLocalSettings();
+            FullCheck();
+        }
+
+        private void LoadLocalSettings()
+        {
+            userSettings = SaveManager.LoadUserSettings();
+            PathText.Text = userSettings.GameDirectory;
+        }
+        private void FullCheck()
+        {
             CheckGameStatus();
             WindowToStatus();
         }
-
         private void CheckGameStatus()
         {
-            string path = LauncherSettings.FullExePath(userSettings);
+            string path = LauncherConst.FullExePath();
             if (File.Exists(path))
             {
+                //CheckUpdate();
                 gameStatus = GameStatus.Ready;
                 return;
             }
 
-            path = LauncherSettings.FullZipPath(userSettings);
-            if (File.Exists(path))
+            if (isZipReady())
             {
-                gameStatus = GameStatus.Unpacking;
+                gameStatus = GameStatus.UnpackRequired;
                 return;
             }
 
             //if nothing
-            PathText.Text = userSettings.GameDirectory;
-            gameStatus = GameStatus.None;
+            gameStatus = GameStatus.LoadRequired;
         }
         private void WindowToStatus()
         {
-            Path.IsEnabled = gameStatus == GameStatus.None;
+            PathText.IsEnabled = gameStatus == GameStatus.LoadRequired;
+            PercentageText.Visibility = Visibility.Hidden;
+            LoadingSpeedText.Visibility = Visibility.Hidden;
 
-            string mainButtonContent;
+            string mainButtonContent = "";
             switch (gameStatus)
             {
                 case GameStatus.Ready:
                     mainButtonContent = "ОТКРЫТЬ";
                     break;
+                case GameStatus.LoadRequired:
+                    mainButtonContent = "ЗАГРУЗИТЬ";
+                    break;
+                case GameStatus.UnpackRequired:
+                    mainButtonContent = "РАСПАКОВАТЬ";
+                    break;
                 case GameStatus.Loading:
+                    PercentageText.Visibility = Visibility.Visible;
+                    LoadingSpeedText.Visibility = Visibility.Visible;
                     mainButtonContent = "ОСТАНОВИТЬ";
                     break;
                 case GameStatus.Unpacking:
-                    mainButtonContent = "ПОЧТИ";
-                    break;
-                case GameStatus.None:
-                    mainButtonContent = "ЗАГРУЗИТЬ";
+                    mainButtonContent = "ОСТАНОВИТЬ";
                     break;
                 default:
-                    throw new Exception("Unknown game status!");
+                    System.Windows.MessageBox.Show("Unknown game status!");
+                    //throw new Exception("Unknown game status!");
+                    break;
             }
 
             Main_button.Content = mainButtonContent;
@@ -75,21 +95,69 @@ namespace TestLauncher
         {
             switch (gameStatus)
             {
-                case GameStatus.None:
-                    //StartLoaging();
+                case GameStatus.LoadRequired:
+                    CreateInstallDirectory();
+                    gameStatus = GameStatus.Loading;
+                    loading.SetLoadingElements(GetLoadingElements());
+                    loading.LoadComplete += Unpacking;
+                    loading.Start();
                     break;
                 case GameStatus.Loading:
-                    //PauseLoading();
+                    gameStatus = GameStatus.LoadRequired;
+                    loading.Stop();
+                    break;
+                case GameStatus.UnpackRequired:
+                    gameStatus = GameStatus.Unpacking;
+                    Unpacking();
                     break;
                 case GameStatus.Unpacking:
-                    return;//nothing
+                    gameStatus = GameStatus.UnpackRequired;
+                    ziper.Stop();
+                    break;
                 case GameStatus.Ready:
-                    //OpenFolder();
+                    if (Directory.Exists(LauncherConst.FullUnzipPath()))
+                    {
+                        Process.Start("explorer.exe", LauncherConst.FullGamePath());
+                    }
+                    else
+                    {
+                        System.Windows.MessageBox.Show("The game directory could not be found!");
+                        CheckGameStatus();
+                    }
                     break;
                 default:
-                    throw new Exception("Unknown game status!");
+                    System.Windows.MessageBox.Show("Unknown game status!");
+                    //throw new Exception("Unknown game status!");
+                    break;
             }
+            WindowToStatus();
         }
+
+        private void CreateInstallDirectory()
+        {
+            Directory.CreateDirectory(LauncherConst.FullUnzipPath());
+        }
+        private bool isZipReady()
+        {
+            return File.Exists(LauncherConst.FullZipPath());
+        }
+        private void Unpacking()
+        {
+            gameStatus = GameStatus.Unpacking;
+            WindowToStatus();
+            ziper.UnzipComplete += FullCheck;
+            ziper.Unzip();
+        }
+        private LoadingElements GetLoadingElements()
+        {
+            return new()
+            {
+                ProgressBar = this.ProgressBar,
+                PersentageText = this.PercentageText,
+                LoadingSpeedText = this.LoadingSpeedText,
+            };
+        }
+
         private void Close_button_Click(object sender, RoutedEventArgs e)
         {
             Close();
@@ -107,6 +175,14 @@ namespace TestLauncher
         }
         private void SetFolder_Click(object sender, RoutedEventArgs e)
         {
+            if (!PathText.IsEnabled)
+            {
+                if(Directory.Exists(PathText.Text))
+                    Process.Start("explorer.exe", PathText.Text);
+
+                return;
+            }
+
             FolderBrowserDialog folderDialog = new ();
             DialogResult result = folderDialog.ShowDialog();
             if (result != System.Windows.Forms.DialogResult.OK)
@@ -114,7 +190,10 @@ namespace TestLauncher
 
             PathText.Text = folderDialog.SelectedPath;
             userSettings.GameDirectory = folderDialog.SelectedPath;
-            SaveManager.Save(userSettings);
+        }
+        private void PathText_LostFocus(object sender, RoutedEventArgs e)
+        {
+            userSettings.GameDirectory = PathText.Text;
         }
     }
 }
