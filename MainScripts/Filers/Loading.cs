@@ -3,7 +3,8 @@ using System.ComponentModel;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
-using System.Runtime.CompilerServices;
+using System.Net.Cache;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -20,25 +21,43 @@ namespace TestLauncher
         private CancellationTokenSource cancellationTokenSource = new();
         private WebClient currentWebClient;
 
-        public void Start()
+        private byte[] buffer = new byte[1024*1024];//1Mb
+
+        public async void Start()
         {
-            using(WebClient webClient = new())
+            Uri uri = new Uri(LauncherConst.LOAD_REFERENCE);
+            try
             {
-                currentWebClient = webClient;
-                Task.Run(() =>
+                cancellationTokenSource.TryReset();
+                using (HttpClient httpClient = new())
                 {
-                    Uri uri = new Uri(LauncherConst.LOAD_REFERENCE);
-
-                    if (loadingElements != null)
+                    int count = 0;
+                    using (Stream httpStream = await httpClient.GetStreamAsync(uri, cancellationTokenSource.Token))
                     {
-                        webClient.OpenRead(uri);
-                        SetProgressEvents(loadingElements, webClient);
-                    }
+                        do //loading zip
+                        {
+                            count = httpStream.Read(buffer, 0, buffer.Length);
 
-                    webClient.DownloadFileCompleted += OnLoadngEnd;
-                    webClient.DownloadFileAsync(uri, LauncherConst.FullZipPath());
-                }, 
-                cancellationTokenSource.Token);
+                        }
+                        while (count > 0);
+
+                        using (Stream unzipStream = File.Create(LauncherConst.FullUnzipPath()))
+                        using (GZipStream zip = new GZipStream(unzipStream, CompressionMode.Decompress))
+                        {
+                            do //unzip
+                            {
+                                count = httpStream.Read(buffer, 0, buffer.Length);
+
+                                zip.Write(buffer, 0, count);
+                            }
+                            while (count > 0);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
             }
         }
 
@@ -82,16 +101,32 @@ namespace TestLauncher
 
         private void OnLoadngEnd(object? sender, AsyncCompletedEventArgs e)
         {
+            if (e.Cancelled)
+            {
+                ClearLoadingFragments();
+                return;
+            }
+
+            if (e.Error != null)
+            {
+                MessageBox.Show("Loading error: " + e.Error.ToString());
+                ClearLoadingFragments();
+                return;
+            }
+
+            //completed successfully 
             LoadComplete?.Invoke();
         }
-        
+
+        private void ClearLoadingFragments()
+        {
+            if(File.Exists(LauncherConst.FullZipPath()))
+                File.Delete(LauncherConst.FullZipPath());
+        }
+
         public void Stop()
         {
-            if(currentWebClient != null)
-            {
-                currentWebClient.CancelAsync();
-                cancellationTokenSource.Cancel();
-            }
+            cancellationTokenSource.Cancel();
         }
 
         public void SetLoadingElements(LoadingElements loadingElements)
