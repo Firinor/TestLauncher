@@ -24,7 +24,7 @@
         <Button x:Name="Minimize_button" Content="" Click="Minimize_button_Click" Canvas.Left="140.334" Canvas.Top="84.5" HorizontalAlignment="Left" VerticalAlignment="Top" Height="36" Width="33" Background="#00DDDDDD" BorderBrush="#00707070"/>
         <Button x:Name="Close_button" Content="" Click="Close_button_Click" Canvas.Left="987" Canvas.Top="84.51" HorizontalAlignment="Left" VerticalAlignment="Center" Background="#00DDDDDD" Width="31" Height="32" BorderBrush="#00707070"/>
         <Canvas x:Name="Progress" Height="0" Width="0">
-            <ProgressBar x:Name="ProgressBar" Height="35" Width="640" Canvas.Left="317" Canvas.Top="476" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <ProgressBar x:Name="LoadingProgressBar" Height="35" Width="640" Canvas.Left="317" Canvas.Top="476" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#FF00C800"/>
             <TextBlock x:Name="PercentageText" TextWrapping="Wrap" Text="Загружено: 0%" HorizontalAlignment="Left" VerticalAlignment="Center" Foreground="Black" Canvas.Left="581.496" Canvas.Top="485.52" FontWeight="Bold" TextAlignment="Center"/>
             <TextBlock x:Name="LoadingSpeedText" TextWrapping="Wrap" Text="Скорость загрузки: 1 Мб/с" Foreground="Black" Canvas.Left="790.355" Canvas.Top="485.52" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" TextAlignment="Right"/>
         </Canvas>

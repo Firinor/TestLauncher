@@ -1,13 +1,11 @@
 ﻿using System;
-using System.ComponentModel;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
-using System.Net.Cache;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
+using MessageBox = System.Windows.Forms.MessageBox;
 
 namespace TestLauncher
 {
@@ -16,112 +14,157 @@ namespace TestLauncher
         public delegate void OnLoadComplete();
         public OnLoadComplete LoadComplete;
 
-        private LoadingElements loadingElements;
+        public delegate void OnLoadNewStatus(GameStatus status);
+        public OnLoadNewStatus NewStatusOfLoading;
+
+        public delegate void WhenDeterminingTheDurationOfWork(long byteLength);
+        public WhenDeterminingTheDurationOfWork WorkLengthNotify;
+
+        public delegate void OnWorkProgress(long addBytes);
+        public OnWorkProgress HttpDownloadProgress;
+        public OnWorkProgress UnzipProgress;
 
         private CancellationTokenSource cancellationTokenSource = new();
-        private WebClient currentWebClient;
 
         private byte[] buffer = new byte[1024*1024];//1Mb
 
         public async void Start()
         {
-            Uri uri = new Uri(LauncherConst.LOAD_REFERENCE);
-            try
+            //first stage
+            NewStatusOfLoading?.Invoke(GameStatus.Loading);
+
+            if (cancellationTokenSource.IsCancellationRequested)
             {
-                cancellationTokenSource.TryReset();
-                using (HttpClient httpClient = new())
+                cancellationTokenSource.Dispose();
+                cancellationTokenSource = new();
+            }
+
+            using (HttpClient httpClient = new())
+            {
+                try
                 {
-                    int count = 0;
-                    using (Stream httpStream = await httpClient.GetStreamAsync(uri, cancellationTokenSource.Token))
-                    {
-                        do //loading zip
-                        {
-                            count = httpStream.Read(buffer, 0, buffer.Length);
-
-                        }
-                        while (count > 0);
-
-                        using (Stream unzipStream = File.Create(LauncherConst.FullUnzipPath()))
-                        using (GZipStream zip = new GZipStream(unzipStream, CompressionMode.Decompress))
-                        {
-                            do //unzip
-                            {
-                                count = httpStream.Read(buffer, 0, buffer.Length);
-
-                                zip.Write(buffer, 0, count);
-                            }
-                            while (count > 0);
-                        }
-                    }
+                    await TryLoading(httpClient);
+                }
+                catch (Exception ex)
+                {
+                    //в рамках тестового задания без обработок исключения
+                    MessageBox.Show("Ошибка скачки: " + ex.Message);
+                    return;
                 }
             }
-            catch (Exception ex)
-            {
 
-            }
-        }
-
-        private void SetProgressEvents(LoadingElements loadingElements, WebClient webClient)
-        {
-            long delta = 0;
-            long lastDownloadMBytes = 0;
-            //string size = webClient.ResponseHeaders["Countent-Length"];
-            //float allMBytesToDownload = ToMB(long.Parse(size));
-
-            StartTimer();
-
-            webClient.DownloadProgressChanged += (s, e) =>
-            {
-                loadingElements.PersentageText.Text = "Загружено: " + e.ProgressPercentage + "%";
-                loadingElements.ProgressBar.Value = e.ProgressPercentage;
-
-                delta += e.BytesReceived - lastDownloadMBytes;
-                lastDownloadMBytes = e.BytesReceived;
-            };
-
-            void TimerTick(object? sender, EventArgs e)
-            {
-                string speed = ToMB(delta).ToString("#.#");
-                delta = 0;
-
-                loadingElements.LoadingSpeedText.Text = "Скорость загрузки: " + speed + "Мб/с";
-            }
-            float ToMB(long bytes)
-            {
-                return (float)(bytes / 1048576f);//1024*1024 b=>Kb=>Mb
-            }
-            void StartTimer()
-            {
-                System.Windows.Forms.Timer timer = new();
-                timer.Interval = 1000; //1 sec
-                timer.Tick += TimerTick;
-                timer.Start();
-            }
-        }
-
-        private void OnLoadngEnd(object? sender, AsyncCompletedEventArgs e)
-        {
-            if (e.Cancelled)
+            if (cancellationTokenSource.IsCancellationRequested)
             {
                 ClearLoadingFragments();
                 return;
             }
 
-            if (e.Error != null)
+            //next stage
+            NewStatusOfLoading?.Invoke(GameStatus.Unpacking);
+
+            try
             {
-                MessageBox.Show("Loading error: " + e.Error.ToString());
+                await TryUnzip();
+            }
+            catch (Exception ex)
+            {
+                //в рамках тестового задания без обработок исключения
+                MessageBox.Show("Ошибка распаковки: " + ex.Message);
+                return;
+            }
+
+            if (cancellationTokenSource.IsCancellationRequested)
+            {
                 ClearLoadingFragments();
                 return;
             }
 
             //completed successfully 
+            NewStatusOfLoading?.Invoke(GameStatus.Ready);
+
             LoadComplete?.Invoke();
         }
-
-        private void ClearLoadingFragments()
+        private async Task TryLoading(HttpClient httpClient)
         {
-            if(File.Exists(LauncherConst.FullZipPath()))
-                File.Delete(LauncherConst.FullZipPath());
+            Uri uri = new Uri(LauncherConst.LOAD_REFERENCE);
+
+            using (Stream httpStream = await httpClient.GetStreamAsync(uri, cancellationTokenSource.Token))
+            {
+                using (WebClient wc = new())
+                {
+                    wc.OpenRead(uri);
+                    long.TryParse(wc.ResponseHeaders["Content-Length"], out long length);
+
+                    if (File.Exists(LauncherConst.FullZipPath()))
+                        if (length == new FileInfo(LauncherConst.FullZipPath()).Length)
+                            return;//The file has already been loaded
+
+                    WorkLengthNotify?.Invoke(length);
+                }
+                using (FileStream zipCreate = File.Create(LauncherConst.FullZipPath()))
+                {
+                    long count = 0;
+                    do //loading zip
+                    {
+                        await Task.Delay(1);
+                        if (cancellationTokenSource.IsCancellationRequested)
+                            return;
+
+                        count = httpStream.Read(buffer, 0, buffer.Length);
+                        zipCreate.Write(buffer, 0, (int)count);
+                        HttpDownloadProgress?.Invoke(count);
+                    }
+                    while (count > 0);
+                }
+            }
+        }
+        private async Task TryUnzip()
+        {
+            using (FileStream reader = File.OpenRead(LauncherConst.FullZipPath()))
+            {
+                ZipArchive zip = new ZipArchive(reader);
+                long count = 0;
+
+                foreach (ZipArchiveEntry entry in zip.Entries)
+                {
+                    count += entry.Length;
+                }
+                WorkLengthNotify?.Invoke(count);
+                count = 0;
+
+                foreach (ZipArchiveEntry entry in zip.Entries)
+                {
+                    if (EntryIsDirectory(entry))
+                    {
+                        Directory.CreateDirectory(PathTo(entry));
+                        continue;
+                    }
+
+                    using (Stream entryStresm = entry.Open())
+                    using (FileStream unzipStream = File.Create(PathTo(entry)))
+                    {
+                        do //unzip
+                        {
+                            await Task.Delay(1);
+                            if (cancellationTokenSource.IsCancellationRequested)
+                                return;
+
+                            count = entryStresm.Read(buffer, 0, buffer.Length);
+                            unzipStream.Write(buffer, 0, (int)count);
+                            UnzipProgress?.Invoke(count);
+                        }
+                        while (count > 0);
+                    }
+                }
+            }
+            bool EntryIsDirectory(ZipArchiveEntry entry)
+            {
+                return entry.FullName[entry.FullName.Length-1] == '/';
+            }
+            string PathTo(ZipArchiveEntry entry)
+            {
+                return Path.Combine(LauncherConst.FullUnzipPath(), entry.FullName);
+            }
         }
 
         public void Stop()
@@ -129,9 +172,12 @@ namespace TestLauncher
             cancellationTokenSource.Cancel();
         }
 
-        public void SetLoadingElements(LoadingElements loadingElements)
+        private void ClearLoadingFragments()
         {
-            this.loadingElements = loadingElements;
+            if(File.Exists(LauncherConst.FullZipPath()))
+                File.Delete(LauncherConst.FullZipPath());
+            if (Directory.Exists(LauncherConst.FullGamePath()))
+                Directory.Delete(LauncherConst.FullGamePath(), recursive: true);
         }
     }
 }

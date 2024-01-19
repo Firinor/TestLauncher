@@ -37,7 +37,6 @@ namespace TestLauncher.MainScripts
             }
             catch (Exception e)
             {
-                //new Exeption(e.Message);
                 MessageBox.Show("Failed to deserialize json! Message: " + e.Message);
                 return new UserSettings(); 
             }

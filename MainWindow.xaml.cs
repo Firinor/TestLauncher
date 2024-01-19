@@ -1,10 +1,10 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Input;
 using TestLauncher.MainScripts;
+using MessageBox = System.Windows.Forms.MessageBox;
 
 namespace TestLauncher
 {
@@ -13,18 +13,22 @@ namespace TestLauncher
     /// </summary>
     public partial class LauncherWindow : Window
     {
-        UserSettings userSettings;
-        Loading loading = new();
-        Ziper ziper = new();
+        private UserSettings userSettings;
+        private Loading loading = new();
+        private ProgressBarView progressBarView;
+        private bool subscribe = false;
 
-        GameStatus gameStatus;
+        private static readonly object s_lock = new object();
+
+        private GameStatus gameStatus;
 
         public LauncherWindow()
         {
             InitializeComponent();
 
             LoadLocalSettings();
-            FullCheck();
+            InitializeLauncherFields();
+            CheckStatus();
         }
 
         private void LoadLocalSettings()
@@ -32,10 +36,26 @@ namespace TestLauncher
             userSettings = SaveManager.LoadUserSettings();
             PathText.Text = userSettings.GameDirectory;
         }
-        private void FullCheck()
+        private void InitializeLauncherFields()
         {
+            progressBarView = new ProgressBarView(PercentageText, LoadingSpeedText, LoadingProgressBar);
+        }
+        private void CheckStatus()
+        {
+            Subscribe();
             CheckGameStatus();
             WindowToStatus();
+        }
+        private void Subscribe()
+        {
+            if (subscribe)
+                return;
+
+            loading.NewStatusOfLoading += NewWindowStatus;
+            loading.WorkLengthNotify += progressBarView.WorkLength;
+            loading.HttpDownloadProgress += progressBarView.DownloadProgress;
+            loading.UnzipProgress += progressBarView.DownloadProgress;
+            subscribe = true;
         }
         private void CheckGameStatus()
         {
@@ -56,11 +76,19 @@ namespace TestLauncher
             //if nothing
             gameStatus = GameStatus.LoadRequired;
         }
+
+        private void NewWindowStatus(GameStatus newStatus)
+        {
+            if (gameStatus == newStatus)
+                return;
+
+            gameStatus = newStatus;
+            WindowToStatus();
+        }
         private void WindowToStatus()
         {
             PathText.IsEnabled = gameStatus == GameStatus.LoadRequired;
-            PercentageText.Visibility = Visibility.Hidden;
-            LoadingSpeedText.Visibility = Visibility.Hidden;
+            progressBarView.WindowToStatus(gameStatus);
 
             string mainButtonContent = "";
             switch (gameStatus)
@@ -75,8 +103,6 @@ namespace TestLauncher
                     mainButtonContent = "РАСПАКОВАТЬ";
                     break;
                 case GameStatus.Loading:
-                    PercentageText.Visibility = Visibility.Visible;
-                    LoadingSpeedText.Visibility = Visibility.Visible;
                     mainButtonContent = "ОСТАНОВИТЬ";
                     break;
                 case GameStatus.Unpacking:
@@ -97,22 +123,21 @@ namespace TestLauncher
             {
                 case GameStatus.LoadRequired:
                     CreateInstallDirectory();
-                    gameStatus = GameStatus.Loading;
-                    loading.SetLoadingElements(GetLoadingElements());
-                    loading.LoadComplete += Unpacking;
                     loading.Start();
                     break;
                 case GameStatus.Loading:
                     gameStatus = GameStatus.LoadRequired;
                     loading.Stop();
+                    progressBarView.ProgressBarToMin();
                     break;
                 case GameStatus.UnpackRequired:
                     gameStatus = GameStatus.Unpacking;
-                    Unpacking();
+                    loading.Start();
                     break;
                 case GameStatus.Unpacking:
-                    gameStatus = GameStatus.UnpackRequired;
-                    ziper.Stop();
+                    gameStatus = GameStatus.LoadRequired;
+                    loading.Stop();
+                    progressBarView.ProgressBarToMin();
                     break;
                 case GameStatus.Ready:
                     if (Directory.Exists(LauncherConst.FullUnzipPath()))
@@ -121,12 +146,12 @@ namespace TestLauncher
                     }
                     else
                     {
-                        System.Windows.MessageBox.Show("The game directory could not be found!");
+                        MessageBox.Show("The game directory could not be found!");
                         CheckGameStatus();
                     }
                     break;
                 default:
-                    System.Windows.MessageBox.Show("Unknown game status!");
+                    MessageBox.Show("Unknown game status!");
                     //throw new Exception("Unknown game status!");
                     break;
             }
@@ -140,22 +165,6 @@ namespace TestLauncher
         private bool isZipReady()
         {
             return File.Exists(LauncherConst.FullZipPath());
-        }
-        private void Unpacking()
-        {
-            gameStatus = GameStatus.Unpacking;
-            WindowToStatus();
-            ziper.UnzipComplete += FullCheck;
-            ziper.Unzip();
-        }
-        private LoadingElements GetLoadingElements()
-        {
-            return new()
-            {
-                ProgressBar = this.ProgressBar,
-                PersentageText = this.PercentageText,
-                LoadingSpeedText = this.LoadingSpeedText,
-            };
         }
 
         private void Close_button_Click(object sender, RoutedEventArgs e)
