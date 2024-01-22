@@ -47,8 +47,7 @@ namespace TestLauncher
                 }
                 catch (Exception ex)
                 {
-                    //в рамках тестового задания без обработок исключения
-                    MessageBox.Show("Ошибка скачки: " + ex.Message);
+                    MessageBox.Show("Loading error: " + ex.Message);
                     return;
                 }
             }
@@ -68,8 +67,7 @@ namespace TestLauncher
             }
             catch (Exception ex)
             {
-                //в рамках тестового задания без обработок исключения
-                MessageBox.Show("Ошибка распаковки: " + ex.Message);
+                MessageBox.Show("Unzip error: " + ex.Message);
                 return;
             }
 
