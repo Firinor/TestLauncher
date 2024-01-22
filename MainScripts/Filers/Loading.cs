@@ -47,7 +47,7 @@ namespace TestLauncher
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Loading error: " + ex.Message);
+                    MessageBox.Show("Download error: " + ex.Message);
                     return;
                 }
             }
