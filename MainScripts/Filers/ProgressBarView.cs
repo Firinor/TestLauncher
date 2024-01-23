@@ -12,7 +12,7 @@ namespace TestLauncher
         private long progressLength = 0,
                      progressCurent = 0,
                      delta = 0,
-                     lastDownloadMBytes = 0;
+                     lastDownloadBytes = 0;
         private Timer timer = new() { Interval = 1000 };//1 sec
 
         private readonly SolidColorBrush greenProgressBar = new SolidColorBrush(Colors.Green);
@@ -103,8 +103,8 @@ namespace TestLauncher
             percentageText.Text = $"{keyWord}: {ProgressPercentage}%";
             progressBar.Value = ProgressPercentage;
 
-            delta += progressCurent - lastDownloadMBytes;
-            lastDownloadMBytes = progressCurent;
+            delta += progressCurent - lastDownloadBytes;
+            lastDownloadBytes = progressCurent;
         }
         public void TimerTick(object? sender, EventArgs e)
         {

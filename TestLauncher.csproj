@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="icon.png" />
+    <Resource Include="Images\icon.png" />
     <Resource Include="Images\bg.png" />
   </ItemGroup>
 

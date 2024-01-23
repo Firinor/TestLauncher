@@ -18,8 +18,6 @@ namespace TestLauncher
         private ProgressBarView progressBarView;
         private bool subscribe = false;
 
-        private static readonly object s_lock = new object();
-
         private GameStatus gameStatus;
 
         public LauncherWindow()
